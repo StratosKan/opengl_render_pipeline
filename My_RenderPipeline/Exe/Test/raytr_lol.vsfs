@@ -1,0 +1,46 @@
+    //https://github.com/KhronosGroup/GLSL/blob/master/extensions/nv/GLSL_NV_ray_tracing.txt
+	#version 460 core
+    #extension GL_NV_ray_tracing : enable
+    layout(location = 0) rayPayloadNV vec4 payload;
+    layout(location = 0) callableDataNV float blendColor;
+    layout(binding = 0, set = 0) uniform accelerationStructureNV acc;
+    layout(binding = 1, rgba32f) uniform image2D img;
+    layout(binding = 1, set = 0) uniform rayParams
+    {
+        vec3 rayOrigin;
+        vec3 rayDir;
+        uint sbtOffset;
+        uint sbtStride;
+        uint missIndex;
+        uint callableSbtIndex;
+    };
+    vec3 computeDir(vec3 inDir) {
+        inDir.x = inDir.x + float(gl_LaunchIDNV.x / gl_LaunchSizeNV.x);
+        inDir.y = inDir.y + float(gl_LaunchIDNV.y / gl_LaunchSizeNV.y);
+        return inDir;
+    }
+    void main()
+    {
+       vec4 imgColor = vec4(0);
+       traceNV(acc, gl_RayFlagsOpaqueNV, 0xff, sbtOffset,
+                    sbtStride, missIndex, rayOrigin, 0.0,
+                    computeDir(rayDir), 100.0f, 0 /* payload */);
+       executeCallable(callableSbtIndex, 0 /* blendColor */);
+       imgColor = payload + vec4(blendColor) ;
+       imageStore(img, ivec2(gl_LaunchIDNV), imgColor);
+
+    }
+
+    Callable Shader:
+
+    #version 460 core
+    #extension GL_NV_ray_tracing : enable
+    layout(location = 0) callableDataInNV float outColor;
+    layout(shaderRecordNV) buffer block
+    {
+         uint blendWeight;
+    }
+    void main()
+    {
+        outColor = float((blendWeight.x >> 5U) & 0x7U + blendWeight.y & 0x3U);
+    }
